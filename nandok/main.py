@@ -1,7 +1,7 @@
 import ast
 import random
 import string
-from typing import Any
+from typing import Any, Dict
 
 import astor
 
@@ -12,16 +12,9 @@ with open("../fizzbuzz.py") as f:
 constants = set()
 called_functions = set()
 defined_functions = set()
-pure_func_dict = {}
-defined_func_dict = {}
 args = set()
-arg_dict = {}
 assigns = set()
-assign_dict = {}
-module_dict = {}
 modules = set()
-
-variable_dict = {}
 
 root = ast.parse(code)
 
@@ -108,36 +101,25 @@ def get_random_string(n: int) -> str:
     return "".join(random.choices(alphabet, k=n))
 
 
-def insert_constant(obj: Any) -> None:
-    root.body.insert(lister.import_count, obj)
+def insert_constant(node: Any) -> None:
+    root.body.insert(lister.import_count, node)
+
+
+def transform_to_dict(obj: set) -> Dict[str, str]:
+    to_dict = {}
+    for value in obj:
+        to_dict[value] = get_random_string(10)
+    return to_dict
 
 
 pure_called_functions = called_functions - defined_functions
 
-for value in pure_called_functions:
-    new_name = get_random_string(10)
-    pure_func_dict[value] = new_name
-
-for value in assigns:
-    new_name = get_random_string(10)
-    assign_dict[value] = new_name
-
-for value in constants:
-    new_name = get_random_string(10)
-    variable_dict[value] = new_name
-
-for value in modules:
-    new_name = get_random_string(10)
-    module_dict[value] = new_name
-
-for value in defined_functions:
-    new_name = get_random_string(10)
-    defined_func_dict[value] = new_name
-
-for value in args:
-    new_name = get_random_string(10)
-    arg_dict[value] = new_name
-
+pure_func_dict = transform_to_dict(pure_called_functions)
+assign_dict = transform_to_dict(assigns)
+variable_dict = transform_to_dict(constants)
+module_dict = transform_to_dict(modules)
+defined_func_dict = transform_to_dict(defined_functions)
+arg_dict = transform_to_dict(args)
 
 ConstantRemover().visit(root)
 
