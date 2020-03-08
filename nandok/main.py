@@ -5,7 +5,7 @@ import string
 import astor
 
 alphabet = string.ascii_letters
-with open("tests/test_helloworld.py") as f:
+with open("../fizzbuzz.py") as f:
     code = f.read()
 
 constants = set()
@@ -13,6 +13,7 @@ functions = set()
 
 func_dict = {}
 before_assign_dict = {}
+modules = set()
 
 variable_dict = {}
 
@@ -67,8 +68,15 @@ class NameLister(ast.NodeVisitor):
             before_assign_dict[target.id] = node.value.value
         self.generic_visit(node)
 
+    def visit_Import(self, node: ast.Import):
+        for module in node.names:
+            module_name = module.asname if module.asname else module.name
+            modules.add(module_name)
+        self.generic_visit(node)
+
     def visit_Call(self, node: ast.Call):
-        functions.add(node.func.id)
+        if isinstance(node.func, ast.Name):
+            functions.add(node.func.id)
         self.generic_visit(node)
 
 
