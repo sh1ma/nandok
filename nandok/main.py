@@ -9,9 +9,12 @@ with open("../fizzbuzz.py") as f:
     code = f.read()
 
 constants = set()
-functions = set()
-
-func_dict = {}
+called_functions = set()
+defined_functions = set()
+pure_func_dict = {}
+defined_func_dict = {}
+args = set()
+arg_dict = {}
 assigns = set()
 assign_dict = {}
 module_dict = {}
@@ -28,8 +31,12 @@ class ConstantRemover(ast.NodeTransformer):
             node.id = assign_dict[node.id]
         elif node.id in module_dict:
             node.id = module_dict[node.id]
-        elif node.id in func_dict:
-            node.id = func_dict[node.id]
+        elif node.id in pure_func_dict:
+            node.id = pure_func_dict[node.id]
+        elif node.id in defined_func_dict:
+            node.id = defined_func_dict[node.id]
+        elif node.id in arg_dict:
+            node.id = arg_dict[node.id]
         return self.generic_visit(node)
 
     def visit_Constant(self, node):
@@ -40,6 +47,16 @@ class ConstantRemover(ast.NodeTransformer):
     def visit_alias(self, node):
         if node.name in module_dict:
             node.asname = module_dict[node.name]
+        return self.generic_visit(node)
+
+    def visit_FunctionDef(self, node):
+        if node.name in defined_func_dict:
+            node.name = defined_func_dict[node.name]
+        return self.generic_visit(node)
+
+    def visit_arg(self, node):
+        if node.arg in arg_dict:
+            node.arg = arg_dict[node.arg]
         return self.generic_visit(node)
 
 
@@ -70,7 +87,15 @@ class NameLister(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call):
         if isinstance(node.func, ast.Name):
-            functions.add(node.func.id)
+            called_functions.add(node.func.id)
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node):
+        defined_functions.add(node.name)
+        self.generic_visit(node)
+
+    def visit_arg(self, node):
+        args.add(node.arg)
         self.generic_visit(node)
 
 
@@ -86,9 +111,11 @@ def insert_constant(obj):
     root.body.insert(lister.import_count, obj)
 
 
-for value in functions:
+pure_called_functions = called_functions - defined_functions
+
+for value in pure_called_functions:
     new_name = get_random_string(10)
-    func_dict[value] = new_name
+    pure_func_dict[value] = new_name
 
 for value in assigns:
     new_name = get_random_string(10)
@@ -102,10 +129,18 @@ for value in modules:
     new_name = get_random_string(10)
     module_dict[value] = new_name
 
+for value in defined_functions:
+    new_name = get_random_string(10)
+    defined_func_dict[value] = new_name
+
+for value in args:
+    new_name = get_random_string(10)
+    arg_dict[value] = new_name
+
 
 ConstantRemover().visit(root)
 
-for value, new_name in func_dict.items():
+for value, new_name in pure_func_dict.items():
     obj = ast.Assign(targets=[ast.Name(id=new_name)], value=ast.Name(id=value),)
     insert_constant(obj)
 
