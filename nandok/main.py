@@ -13,6 +13,7 @@ functions = set()
 
 func_dict = {}
 before_assign_dict = {}
+module_dict = {}
 modules = set()
 
 variable_dict = {}
@@ -30,6 +31,12 @@ class ConstantRemover(ast.NodeTransformer):
             for target in node.targets:
                 target.id = variable_dict[node.value.value]
             node = None
+        elif isinstance(node.value, ast.Call):
+            if (
+                isinstance(node.value.func, ast.Attribute)
+                and node.value.func.value.id in module_dict
+            ):
+                node.value.func.value.id = module_dict[node.value.func.value.id]
         return node
 
     def visit_Call(self, node):
@@ -44,7 +51,10 @@ class ConstantRemover(ast.NodeTransformer):
                 node.args.insert(node.args.index(arg), new_node)
                 node.args.remove(arg)
         # 関数名変更
-        node.func.id = func_dict[node.func.id]
+        if isinstance(node.func, ast.Name):
+            node.func.id = func_dict[node.func.id]
+        elif isinstance(node.func, ast.Attribute):
+            node.func.value.id = module_dict[node.func.value.id]
         return node
 
     def visit_Constant(self, node):
@@ -53,8 +63,21 @@ class ConstantRemover(ast.NodeTransformer):
         new_node = ast.Name(id=variable_dict[node.value])
         return new_node
 
+    def visit_Import(self, node):
+        for module in node.names.copy():
+            module_name = module.asname if module.asname else module.name
+            if module_name not in module_dict:
+                continue
+            module.asname = module_dict[module_name]
+        node.lineno = 0
+        return node
+
 
 class NameLister(ast.NodeVisitor):
+    def __init__(self):
+        super().__init__()
+        self.import_count = 0
+
     def visit_Constant(self, node: ast.Constant):
         constants.add(node.value)
         self.generic_visit(node)
@@ -69,9 +92,14 @@ class NameLister(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import):
+        self.import_count += 1
         for module in node.names:
             module_name = module.asname if module.asname else module.name
             modules.add(module_name)
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node):
+        self.import_count += 1
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call):
@@ -80,27 +108,33 @@ class NameLister(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+lister = NameLister()
+lister.visit(root)
+
+
 def get_random_string(n):
     return "".join(random.choices(alphabet, k=n))
 
 
 def insert_constant(obj):
-    root.body.insert(0, obj)
+    root.body.insert(lister.import_count, obj)
 
-
-NameLister().visit(root)
 
 for value in functions:
-    new_name = get_random_string(5)
+    new_name = get_random_string(10)
     func_dict[value] = new_name
 
 for value in before_assign_dict.values():
-    new_name = get_random_string(5)
+    new_name = get_random_string(10)
     variable_dict[value] = new_name
 
 for value in constants:
-    new_name = get_random_string(5)
+    new_name = get_random_string(10)
     variable_dict[value] = new_name
+
+for value in modules:
+    new_name = get_random_string(10)
+    module_dict[value] = new_name
 
 
 ConstantRemover().visit(root)
