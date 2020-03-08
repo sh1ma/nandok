@@ -1,6 +1,7 @@
 import ast
 import random
 import string
+from typing import Any
 
 import astor
 
@@ -26,7 +27,7 @@ root = ast.parse(code)
 
 
 class ConstantRemover(ast.NodeTransformer):
-    def visit_Name(self, node):
+    def visit_Name(self, node: ast.Name):
         if node.id in assign_dict:
             node.id = assign_dict[node.id]
         elif node.id in module_dict:
@@ -39,29 +40,29 @@ class ConstantRemover(ast.NodeTransformer):
             node.id = arg_dict[node.id]
         return self.generic_visit(node)
 
-    def visit_Constant(self, node):
+    def visit_Constant(self, node: ast.Constant):
         if node.value in variable_dict:
             node = ast.Name(id=variable_dict[node.value])
         return self.generic_visit(node)
 
-    def visit_alias(self, node):
+    def visit_alias(self, node: ast.alias):
         if node.name in module_dict:
             node.asname = module_dict[node.name]
         return self.generic_visit(node)
 
-    def visit_FunctionDef(self, node):
+    def visit_FunctionDef(self, node: ast.FunctionDef):
         if node.name in defined_func_dict:
             node.name = defined_func_dict[node.name]
         return self.generic_visit(node)
 
-    def visit_arg(self, node):
+    def visit_arg(self, node: ast.arg):
         if node.arg in arg_dict:
             node.arg = arg_dict[node.arg]
         return self.generic_visit(node)
 
 
 class NameLister(ast.NodeVisitor):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.import_count = 0
 
@@ -69,7 +70,7 @@ class NameLister(ast.NodeVisitor):
         constants.add(node.value)
         self.generic_visit(node)
 
-    def visit_Name(self, node):
+    def visit_Name(self, node: ast.Name):
         if isinstance(node.ctx, ast.Store):
             assigns.add(node.id)
         self.generic_visit(node)
@@ -81,7 +82,7 @@ class NameLister(ast.NodeVisitor):
             modules.add(module_name)
         self.generic_visit(node)
 
-    def visit_ImportFrom(self, node):
+    def visit_ImportFrom(self, node: ast.ImportFrom):
         self.import_count += 1
         self.generic_visit(node)
 
@@ -90,11 +91,11 @@ class NameLister(ast.NodeVisitor):
             called_functions.add(node.func.id)
         self.generic_visit(node)
 
-    def visit_FunctionDef(self, node):
+    def visit_FunctionDef(self, node: ast.FunctionDef):
         defined_functions.add(node.name)
         self.generic_visit(node)
 
-    def visit_arg(self, node):
+    def visit_arg(self, node: ast.arg):
         args.add(node.arg)
         self.generic_visit(node)
 
@@ -103,11 +104,11 @@ lister = NameLister()
 lister.visit(root)
 
 
-def get_random_string(n):
+def get_random_string(n: int) -> str:
     return "".join(random.choices(alphabet, k=n))
 
 
-def insert_constant(obj):
+def insert_constant(obj: Any) -> None:
     root.body.insert(lister.import_count, obj)
 
 
