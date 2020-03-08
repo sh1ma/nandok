@@ -12,7 +12,8 @@ constants = set()
 functions = set()
 
 func_dict = {}
-before_assign_dict = {}
+assigns = set()
+assign_dict = {}
 module_dict = {}
 modules = set()
 
@@ -22,55 +23,24 @@ root = ast.parse(code)
 
 
 class ConstantRemover(ast.NodeTransformer):
-    def visit_Assign(self, node):
-        if (
-            isinstance(node.value, ast.Name) and node.value.id in before_assign_dict
-        ) or (
-            isinstance(node.value, ast.Constant) and node.value.value in variable_dict
-        ):
-            for target in node.targets:
-                target.id = variable_dict[node.value.value]
-            node = None
-        elif isinstance(node.value, ast.Call):
-            if (
-                isinstance(node.value.func, ast.Attribute)
-                and node.value.func.value.id in module_dict
-            ):
-                node.value.func.value.id = module_dict[node.value.func.value.id]
-        return node
-
-    def visit_Call(self, node):
-        # 引数の処理
-        for arg in node.args.copy():
-            if isinstance(arg, ast.Name) and arg.id in before_assign_dict:
-                # 変数定義してあった場合
-                arg.id = variable_dict[before_assign_dict[arg.id]]
-            elif isinstance(arg, ast.Constant):
-                # 定数だった場合
-                new_node = ast.Name(id=variable_dict[arg.value])
-                node.args.insert(node.args.index(arg), new_node)
-                node.args.remove(arg)
-        # 関数名変更
-        if isinstance(node.func, ast.Name):
-            node.func.id = func_dict[node.func.id]
-        elif isinstance(node.func, ast.Attribute):
-            node.func.value.id = module_dict[node.func.value.id]
-        return node
+    def visit_Name(self, node):
+        if node.id in assign_dict:
+            node.id = assign_dict[node.id]
+        elif node.id in module_dict:
+            node.id = module_dict[node.id]
+        elif node.id in func_dict:
+            node.id = func_dict[node.id]
+        return self.generic_visit(node)
 
     def visit_Constant(self, node):
-        if node.value not in variable_dict:
-            return node
-        new_node = ast.Name(id=variable_dict[node.value])
-        return new_node
+        if node.value in variable_dict:
+            node = ast.Name(id=variable_dict[node.value])
+        return self.generic_visit(node)
 
-    def visit_Import(self, node):
-        for module in node.names.copy():
-            module_name = module.asname if module.asname else module.name
-            if module_name not in module_dict:
-                continue
-            module.asname = module_dict[module_name]
-        node.lineno = 0
-        return node
+    def visit_alias(self, node):
+        if node.name in module_dict:
+            node.asname = module_dict[node.name]
+        return self.generic_visit(node)
 
 
 class NameLister(ast.NodeVisitor):
@@ -84,11 +54,7 @@ class NameLister(ast.NodeVisitor):
 
     def visit_Assign(self, node: ast.Assign):
         for target in node.targets:
-            if not isinstance(node.value, ast.Constant) or not isinstance(
-                node.value.value, (int, str, bool)
-            ):
-                continue
-            before_assign_dict[target.id] = node.value.value
+            assigns.add(target.id)
         self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import):
@@ -124,9 +90,9 @@ for value in functions:
     new_name = get_random_string(10)
     func_dict[value] = new_name
 
-for value in before_assign_dict.values():
+for value in assigns:
     new_name = get_random_string(10)
-    variable_dict[value] = new_name
+    assign_dict[value] = new_name
 
 for value in constants:
     new_name = get_random_string(10)
