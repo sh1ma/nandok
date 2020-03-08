@@ -52,9 +52,9 @@ class NameLister(ast.NodeVisitor):
         constants.add(node.value)
         self.generic_visit(node)
 
-    def visit_Assign(self, node: ast.Assign):
-        for target in node.targets:
-            assigns.add(target.id)
+    def visit_Name(self, node):
+        if isinstance(node.ctx, ast.Store):
+            assigns.add(node.id)
         self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import):
