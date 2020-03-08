@@ -53,20 +53,23 @@ class ConstantRemover(ast.NodeTransformer):
         return new_node
 
 
-def listing_defined_name(node):
-    if isinstance(node, ast.Constant):
+class NameLister(ast.NodeVisitor):
+    def visit_Constant(self, node: ast.Constant):
         constants.add(node.value)
-    if isinstance(node, ast.Assign):
+        self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign):
         for target in node.targets:
             if not isinstance(node.value, ast.Constant) or not isinstance(
                 node.value.value, (int, str, bool)
             ):
                 continue
             before_assign_dict[target.id] = node.value.value
-    if isinstance(node, ast.Call):
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call):
         functions.add(node.func.id)
-    for child in ast.iter_child_nodes(node):
-        listing_defined_name(child)
+        self.generic_visit(node)
 
 
 def get_random_string(n):
@@ -77,7 +80,7 @@ def insert_constant(obj):
     root.body.insert(0, obj)
 
 
-listing_defined_name(root)
+NameLister().visit(root)
 
 for value in functions:
     new_name = get_random_string(5)
