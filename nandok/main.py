@@ -61,36 +61,36 @@ class NameLister(ast.NodeVisitor):
 
     def visit_Constant(self, node: ast.Constant):
         constants.add(node.value)
-        self.generic_visit(node)
+        return self.generic_visit(node)
 
     def visit_Name(self, node: ast.Name):
         if isinstance(node.ctx, ast.Store):
             assigns.add(node.id)
-        self.generic_visit(node)
+        return self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import):
         self.import_count += 1
         for module in node.names:
             module_name = module.asname if module.asname else module.name
             modules.add(module_name)
-        self.generic_visit(node)
+        return self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom):
         self.import_count += 1
-        self.generic_visit(node)
+        return self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call):
         if isinstance(node.func, ast.Name):
             called_functions.add(node.func.id)
-        self.generic_visit(node)
+        return self.generic_visit(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
         defined_functions.add(node.name)
-        self.generic_visit(node)
+        return self.generic_visit(node)
 
     def visit_arg(self, node: ast.arg):
         args.add(node.arg)
-        self.generic_visit(node)
+        return self.generic_visit(node)
 
 
 lister = NameLister()
