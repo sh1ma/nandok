@@ -1,103 +1,129 @@
 import ast
 import random
 import string
+from typing import Any, Dict
 
 import astor
 
 alphabet = string.ascii_letters
-with open("tests/test_helloworld.py") as f:
+with open("../fizzbuzz.py") as f:
     code = f.read()
 
 constants = set()
-functions = set()
-
-func_dict = {}
-before_assign_dict = {}
-
-variable_dict = {}
+called_functions = set()
+defined_functions = set()
+args = set()
+assigns = set()
+modules = set()
 
 root = ast.parse(code)
 
 
 class ConstantRemover(ast.NodeTransformer):
-    def visit_Assign(self, node):
-        if (
-            isinstance(node.value, ast.Name) and node.value.id in before_assign_dict
-        ) or (
-            isinstance(node.value, ast.Constant) and node.value.value in variable_dict
-        ):
-            for target in node.targets:
-                target.id = variable_dict[node.value.value]
-            node = None
-        return node
+    def visit_Name(self, node: ast.Name):
+        if node.id in assign_dict:
+            node.id = assign_dict[node.id]
+        elif node.id in module_dict:
+            node.id = module_dict[node.id]
+        elif node.id in pure_func_dict:
+            node.id = pure_func_dict[node.id]
+        elif node.id in defined_func_dict:
+            node.id = defined_func_dict[node.id]
+        elif node.id in arg_dict:
+            node.id = arg_dict[node.id]
+        return self.generic_visit(node)
 
-    def visit_Call(self, node):
-        # 引数の処理
-        for arg in node.args.copy():
-            if isinstance(arg, ast.Name) and arg.id in before_assign_dict:
-                # 変数定義してあった場合
-                arg.id = variable_dict[before_assign_dict[arg.id]]
-            elif isinstance(arg, ast.Constant):
-                # 定数だった場合
-                new_node = ast.Name(id=variable_dict[arg.value])
-                node.args.insert(node.args.index(arg), new_node)
-                node.args.remove(arg)
-        # 関数名変更
-        node.func.id = func_dict[node.func.id]
-        return node
+    def visit_Constant(self, node: ast.Constant):
+        if node.value in variable_dict:
+            node = ast.Name(id=variable_dict[node.value])
+        return self.generic_visit(node)
 
-    def visit_Constant(self, node):
-        if node.value not in variable_dict:
-            return node
-        new_node = ast.Name(id=variable_dict[node.value])
-        return new_node
+    def visit_alias(self, node: ast.alias):
+        if node.name in module_dict:
+            node.asname = module_dict[node.name]
+        return self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        if node.name in defined_func_dict:
+            node.name = defined_func_dict[node.name]
+        return self.generic_visit(node)
+
+    def visit_arg(self, node: ast.arg):
+        if node.arg in arg_dict:
+            node.arg = arg_dict[node.arg]
+        return self.generic_visit(node)
 
 
 class NameLister(ast.NodeVisitor):
+    def __init__(self) -> None:
+        super().__init__()
+        self.import_count = 0
+
     def visit_Constant(self, node: ast.Constant):
         constants.add(node.value)
-        self.generic_visit(node)
+        return self.generic_visit(node)
 
-    def visit_Assign(self, node: ast.Assign):
-        for target in node.targets:
-            if not isinstance(node.value, ast.Constant) or not isinstance(
-                node.value.value, (int, str, bool)
-            ):
-                continue
-            before_assign_dict[target.id] = node.value.value
-        self.generic_visit(node)
+    def visit_Name(self, node: ast.Name):
+        if isinstance(node.ctx, ast.Store):
+            assigns.add(node.id)
+        return self.generic_visit(node)
+
+    def visit_Import(self, node: ast.Import):
+        self.import_count += 1
+        for module in node.names:
+            module_name = module.asname if module.asname else module.name
+            modules.add(module_name)
+        return self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom):
+        self.import_count += 1
+        return self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call):
-        functions.add(node.func.id)
-        self.generic_visit(node)
+        if isinstance(node.func, ast.Name):
+            called_functions.add(node.func.id)
+        return self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        defined_functions.add(node.name)
+        return self.generic_visit(node)
+
+    def visit_arg(self, node: ast.arg):
+        args.add(node.arg)
+        return self.generic_visit(node)
 
 
-def get_random_string(n):
+lister = NameLister()
+lister.visit(root)
+
+
+def get_random_string(n: int) -> str:
     return "".join(random.choices(alphabet, k=n))
 
 
-def insert_constant(obj):
-    root.body.insert(0, obj)
+def insert_constant(node: Any) -> None:
+    root.body.insert(lister.import_count, node)
 
 
-NameLister().visit(root)
+def transform_to_dict(obj: set) -> Dict[str, str]:
+    to_dict = {}
+    for value in obj:
+        to_dict[value] = get_random_string(10)
+    return to_dict
 
-for value in functions:
-    new_name = get_random_string(5)
-    func_dict[value] = new_name
 
-for value in before_assign_dict.values():
-    new_name = get_random_string(5)
-    variable_dict[value] = new_name
+pure_called_functions = called_functions - defined_functions
 
-for value in constants:
-    new_name = get_random_string(5)
-    variable_dict[value] = new_name
-
+pure_func_dict = transform_to_dict(pure_called_functions)
+assign_dict = transform_to_dict(assigns)
+variable_dict = transform_to_dict(constants)
+module_dict = transform_to_dict(modules)
+defined_func_dict = transform_to_dict(defined_functions)
+arg_dict = transform_to_dict(args)
 
 ConstantRemover().visit(root)
 
-for value, new_name in func_dict.items():
+for value, new_name in pure_func_dict.items():
     obj = ast.Assign(targets=[ast.Name(id=new_name)], value=ast.Name(id=value),)
     insert_constant(obj)
 
